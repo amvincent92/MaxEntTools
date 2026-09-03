@@ -1,0 +1,45 @@
+Package: MaxEntTools
+Type: Package
+Title: Tools and Pipelines for MaxEnt Species Distribution Modelling
+Version: 0.1.0
+Authors@R: c(
+    person(
+      "Alan", "Vincent",
+      email = "alan.vincent@anu.edu.au",
+      role = c("aut", "cre")
+    )
+  )
+Description: Consolidated tools and pipelines for MaxEnt species distribution
+    modelling. Includes functions for background area and bias layer
+    generation, occurrence record thinning, model generation via ENMeval,
+    model validation and null model testing, and future climate prediction
+    workflows.
+License: GPL-3
+Encoding: UTF-8
+LazyData: true
+Depends:
+    R (>= 4.1.0)
+Imports:
+    cli,
+    dismo,
+    dplyr,
+    ENMeval (>= 2.0.5),
+    ggcorrplot,
+    ggplot2,
+    glue,
+    grDevices,
+    predicts,
+    sf,
+    stats,
+    stringr,
+    terra,
+    tictoc,
+    tidyr,
+    units,
+    usdm,
+    utils
+Suggests:
+    maxnet,
+    rJava (>= 1.0-11),
+    rJavaEnv
+RoxygenNote: 7.3.2

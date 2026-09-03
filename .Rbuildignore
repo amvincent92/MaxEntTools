@@ -1,0 +1,8 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^AGENTS\.md$
+^DEPENDENCIES_SUMMARY\.md$
+^DESCRIPTION_TEMPLATE$
+^devNotes\.R$
+^java_setup\.R$
+^metadata\.R$
