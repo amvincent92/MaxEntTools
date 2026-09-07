@@ -218,15 +218,22 @@ stack_futureEnvs <- function(pred.rast.future) {
     if(is.null(future.list[[species]][[time]])) future.list[[species]][[time]] <- list()
     if(is.null(future.list[[species]][[time]][[ssp]])) future.list[[species]][[time]][[ssp]] <- list()
 
-    # Add raster layer to appropriate nested location
-    future.list[[species]][[time]][[ssp]][[model]] <- pred.rast.future[[name]]
+    if (is.na(model)) {
+      # Add raster layer to appropriate nested location
+      future.list[[species]][[time]][[ssp]] <- pred.rast.future[[name]]
+    } else {
+      # Add raster layer to appropriate nested location
+      future.list[[species]][[time]][[ssp]][[model]] <- pred.rast.future[[name]]
+    }
+    # Gate for allowing ensemble vs model specific
+
   }
 
   return(future.list)
 }
 # Function for stacking outputs of multiple future environmental predictions
 # Built on a Species -> Time -> SSP -> Model structure
-# TODO RDS does not survive saving and loading, probably because of the way terra references and stores rasters in memory
+
 #' Split Future Prediction Naming into Components
 #' @description Splits the taxonName column of an sf polygon object into separate taxonName, time.period, ssp, and model columns
 #' @param sf.future.thresh sf polygon object with a taxonName column formatted as "taxonName_time.period_ssp_model"

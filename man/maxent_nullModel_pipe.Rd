@@ -8,6 +8,7 @@ maxent_nullModel_pipe(
   null.iter = 1000,
   data.dir = "data/maxent/",
   output.dir = "outputs/maxent/",
+  functions.dir = maxent.tools,
   parallel = F,
   numCores = 4
 )
@@ -18,6 +19,8 @@ maxent_nullModel_pipe(
 \item{data.dir}{Character, path to directory containing model outputs}
 
 \item{output.dir}{Character, path to directory for null model outputs}
+
+\item{functions.dir}{Character, path to directory containing validation functions}
 
 \item{parallel}{Logical, whether to enable parallel processing}
 

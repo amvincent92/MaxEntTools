@@ -7,6 +7,7 @@
 maxent_modelValidation_pipe(
   env.vars,
   occ.sf.pts,
+  functions.dir = maxent.tools,
   data.dir = "data/maxent/",
   output.dir = "outputs/maxent/",
   raster.preds = T,
@@ -16,15 +17,11 @@ maxent_modelValidation_pipe(
 \arguments{
 \item{env.vars}{SpatRaster, environmental variables used in original models}
 
-\item{occ.sf.pts}{sf Points object, occurrence records used in original models}
+\item{functions.dir}{Character, path to directory containing validation functions}
 
 \item{data.dir}{Character, path to directory containing model outputs}
 
 \item{output.dir}{Character, path to directory for validation outputs}
-
-\item{raster.preds}{Logical, whether prediction rasters were generated for each model (default TRUE); controls whether prediction rasters are re-written and thresholded}
-
-\item{thresh.method}{Character, threshold method passed to `write_model_threshold()`: "maxsss" (default), "or.10.threshold", or "or.min.threshold"}
 }
 \value{
 None. Saves validation outputs to disk:

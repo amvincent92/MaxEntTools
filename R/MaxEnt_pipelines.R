@@ -58,26 +58,17 @@
 
 ## Data Validation Pipeline ----------------------------------------------------
 
-#' Maxent Data Validation Pipeline
-#' @description Pipeline for validating occurrence, environmental, background area, and study area inputs before model generation
-#' @param occ.sf.pts sf Points object, occurrence records
-#' @param env.vars SpatRaster, environmental variables
-#' @param bg.areas sf Polygon, background area polygons, such as ibra bioregions etc
-#' @param study.area sf Polygon, study area polygon, must contain all occurrence points
-#' @param data.dir Character, path to data directory
-#' @param output.dir Character, path to output directory
-#' @param subset.col Character, column name for subsetting data by species (default "scientificName")
-#' @return None. Called for side effects: prints warnings, and writes an environmental correlation plot to disk
-#' @details Checks that occurrence records fall within the study area, checks each species has a minimum number of records via `check_numRecords()`, and writes an environmental correlation plot via `check_envCorr()`
-#' @export
-
 maxent_dataValidation_pipe <- function(occ.sf.pts,
                                        env.vars,
                                        bg.areas,
                                        study.area,
                                        data.dir = "data/maxent/",
                                        output.dir = "outputs/maxent/",
+                                       functions.dir = maxent.tools,
                                        subset.col = "scientificName") {
+
+  source(paste0(functions.dir, "MaxEnt_functions.R"), local = T)
+  # Source Maxent Functions
 
   ## TODO Fill out as testing progresses
   ## Check that occurrence records, env and bg.areas, and study area are all in alignment
@@ -119,14 +110,14 @@ maxent_dataValidation_pipe <- function(occ.sf.pts,
 #' @param env.vars SpatRaster, environmental variables
 #' @param bg.areas sf Polygon, background area polygons, such as ibra bioregions etc
 #' @param study.area sf Polygon, study area polygon, must contain all occurrence points.
-#' @param data.dir Character, path to data directory; subfolders (biasLayer, thinnedRecords, bgAreas, bgPoints, modelOutput, modelOutputRast) are created beneath it for intermediate and final model outputs
+#' @param output.dir Character, path to output directory
+#' @param functions.dir Character, path to functions directory
 #' @param seed Numeric, random seed for reproducibility
 #' @param java.mem.gb Numeric, Java memory in GB
 #' @param bg.buffer.dist Numeric, buffer distance for background points
 #' @param bg.pts.num Numeric, number of background points
 #' @param subset.col Character, column name for subsetting data
 #' @param clampStudyArea Logical, restrict background areas to within area of interest to reduce computation time
-#' @param raster.preds Logical, whether to generate and save raster predictions for each model (default TRUE). If FALSE, the modelOutputRast subfolder is not created
 #' @param doClamp Logical, whether to clamp predictions to avoid extrapolation beyond training data
 #' @param categoricals Character vector, use to tell MaxEnt which of your variables are categorical. Used terra::rasterise and assign field for factor levels. Do not aggregate post as this will break layer for enmeval.
 #' @param partitions Character, type of spatial partitioning
@@ -148,6 +139,7 @@ maxent_modelGeneration_pipe <- function(occ.sf.pts,
                                         bg.areas,
                                         study.area,
                                         data.dir,
+                                        functions.dir = maxent.tools,
                                         # User defined variables
                                         seed = 343,
                                         java.mem.gb = 16,
@@ -170,6 +162,9 @@ maxent_modelGeneration_pipe <- function(occ.sf.pts,
                                         # Default maxent function settings
 ) {
 
+  source(paste0(functions.dir, "MaxEnt_functions.R"), local = T)
+  # Source Maxent Functions
+
   env_config(algorithm = algorithm,
              seed = seed,
              java.mem.gb = java.mem.gb)
@@ -190,41 +185,41 @@ maxent_modelGeneration_pipe <- function(occ.sf.pts,
 
   ### Create Bias Layer --------------------------------------------------------------
 
-  if(dir.exists(paste0(data.dir, "biasLayer/")) == F){
-    dir.create(paste0(data.dir, "biasLayer/"), recursive = T)
+  if(dir.exists(paste0(output.dir, "biasLayer/")) == F){
+    dir.create(paste0(output.dir, "biasLayer/"), recursive = T)
   } else {
     message("SDM bias layer detected...")
   }
   # Output folder for bias layer
 
-  if (file.exists(paste0(data.dir, "biasLayer/biasLayer.rds")) == F) {
+  if (file.exists(paste0(output.dir, "biasLayer/biasLayer.rds")) == F) {
     bias.layer <- bias_layer_rast(data.sf = occ.sf.pts,
                                   env.vars = env.vars,
                                   bg.poly = study.area,
-                                  output.dir = paste0(data.dir, "biasLayer/"))
+                                  output.dir = paste0(output.dir, "biasLayer/"))
   } else {
     message("Bias layer detected, reading from file...")
-    bias.layer <- readRDS(paste0(data.dir, "biasLayer/biasLayer.rds"))
+    bias.layer <- readRDS(paste0(output.dir, "biasLayer/biasLayer.rds"))
   }
 
   ### Thin Records ------------------------------------------------------------
 
-  if(dir.exists(paste0(data.dir, "thinnedRecords/")) == F){
-    dir.create(paste0(data.dir, "thinnedRecords/"), recursive = T)
+  if(dir.exists(paste0(output.dir, "thinnedRecords/")) == F){
+    dir.create(paste0(output.dir, "thinnedRecords/"), recursive = T)
   } else {
     message("Thinned occurrence records detected...")
   }
   # Output folder for thinned occurrence records
 
-  if (file.exists(paste0(data.dir, "thinnedRecords/thinnedSf_byRast.RDS")) == F) {
+  if (file.exists(paste0(output.dir, "thinnedRecords/thinnedSf_byRast.RDS")) == F) {
 
     occ.sf.pts <- thin_records_sf_rast(data.sf = occ.sf.pts,
                                        subset.col = subset.col,
                                        ref.rast = env.vars,
-                                       output.dir = paste0(data.dir, "thinnedRecords/"))
+                                       output.dir = paste0(output.dir, "thinnedRecords/"))
   } else {
     message("Thinned records by raster detected, reading from file...")
-    occ.sf.pts <- readRDS(paste0(data.dir, "thinnedRecords/thinnedSF_byRast.RDS"))
+    occ.sf.pts <- readRDS(paste0(output.dir, "thinnedRecords/thinnedSF_byRast.RDS"))
   }
   # If thinned records don't exist, thin them and save output
 
@@ -233,69 +228,69 @@ maxent_modelGeneration_pipe <- function(occ.sf.pts,
 
   ## Background Areas --------------------------------------------------------
 
-  if(dir.exists(paste0(data.dir, "bgAreas/")) == F){
-    dir.create(paste0(data.dir, "bgAreas/"), recursive = T)
+  if(dir.exists(paste0(output.dir, "bgAreas/")) == F){
+    dir.create(paste0(output.dir, "bgAreas/"), recursive = T)
   } else {
     message("SDM BG areas detected...")
   }
   # Output folder for background areas
 
-  if (file.exists(paste0(data.dir, "bgAreas/bgAreas.RDS")) == F) {
+  if (file.exists(paste0(output.dir, "bgAreas/bgAreas.RDS")) == F) {
     bg.areas <- define_background_area(bg.areas = bg.areas,
                                        occ.sf.pts = occ.sf.pts,
                                        study.area = study.area,
                                        subset.col = subset.col,
                                        bg.buffer.dist = bg.buffer.dist,
                                        simplify.poly = T,
-                                       output.dir = paste0(data.dir, "bgAreas/"))
+                                       output.dir = paste0(output.dir, "bgAreas/"))
   } else {
     message("Background areas detected, reading from file...")
-    bg.areas <- readRDS(paste0(data.dir, "bgAreas/bgAreas.RDS"))
+    bg.areas <- readRDS(paste0(output.dir, "bgAreas/bgAreas.RDS"))
   }
   # If thinned records don't exist, thin them and save output
 
   ## Background Points -------------------------------------------------------
 
-  if(dir.exists(paste0(data.dir, "bgPoints/")) == F){
-    dir.create(paste0(data.dir, "bgPoints/"), recursive = T)
+  if(dir.exists(paste0(output.dir, "bgPoints/")) == F){
+    dir.create(paste0(output.dir, "bgPoints/"), recursive = T)
   } else {
     message("SDM BG points detected...")
   }
   # Output folder for background Points
 
-  if (file.exists(paste0(data.dir, "bgPoints/bgPoints.RDS")) == F) {
+  if (file.exists(paste0(output.dir, "bgPoints/bgPoints.RDS")) == F) {
     bg.points <- sample_bg_points(bg.areas = bg.areas,
                                   bias.layer = bias.layer,
                                   env.vars = env.vars,
                                   sample.size = bg.pts.num,
-                                  output.dir = paste0(data.dir, "bgPoints/"))
+                                  output.dir = paste0(output.dir, "bgPoints/"))
 
     # bg.points.thinned <- thin_records_sf_rast(bg.points,
     #                                           subset.col = "subset_value",
     #                                           ref.rast = env.vars,
-    #                                           output.dir = paste0(data.dir, "bgPoints/"))
+    #                                           output.dir = paste0(output.dir, "bgPoints/"))
     ## Could thin bg points to stop occasional overlap between bg points to same rasters.
     ## Needs some alteration to thin records for each of the output sf dataframe
     ## ENMeval does checks for you so not currently essential... Main records thinned above
 
   } else {
     message("Background points detected, reading from file...")
-    bg.points <- readRDS(paste0(data.dir, "bgPoints/bgPoints.RDS"))
+    bg.points <- readRDS(paste0(output.dir, "bgPoints/bgPoints.RDS"))
   }
   # If thinned records don't exist, thin them and save output
 
   ## ENM Eval Function -------------------------------------------------------
 
-  if(dir.exists(paste0(data.dir, "modelOutput/")) == F){
-    dir.create(paste0(data.dir, "modelOutput/"), recursive = T)
+  if(dir.exists(paste0(output.dir, "modelOutput/")) == F){
+    dir.create(paste0(output.dir, "modelOutput/"), recursive = T)
   } else {
     message("SDM Output folder detected...")
   }
   ## Output folder for SDM objects
 
   if (raster.preds == T) {
-    if(dir.exists(paste0(data.dir, "modelOutputRast/")) == F){
-      dir.create(paste0(data.dir, "modelOutputRast/"), recursive = T)
+    if(dir.exists(paste0(output.dir, "modelOutputRast/")) == F){
+      dir.create(paste0(output.dir, "modelOutputRast/"), recursive = T)
     } else {
       message("SDM Raster Output folder detected...")
     }
@@ -308,20 +303,20 @@ maxent_modelGeneration_pipe <- function(occ.sf.pts,
 
     sp.name <- unique(as.data.frame(occ.sf.pts)[subset.col])[i,1]
 
-    occ.subset <- occ.sf.pts |>
+    occ.subset <- occ.sf.pts %>%
       dplyr::filter(.data[[subset.col]] == sp.name)
     # Select all records which the equal the subset column equals the unique scientific name subset to the loop,
-    occ.subset <- as.data.frame(occ.subset) |>
+    occ.subset <- as.data.frame(occ.subset) %>%
       dplyr::select(decimalLongitude, decimalLatitude)
     # Subset occurrence records to species of interest
     # Prep for passing to ENMeval
 
-    bg.points.subset <- bg.points |>
-      dplyr::filter(.data$subset_value == sp.name) |>
-      sf::st_coordinates() |>
-      as.data.frame() |>
-      dplyr::select(X, Y) |>
-      dplyr::rename(decimalLongitude = X,
+    bg.points.subset <- bg.points %>%
+      dplyr::filter(.data$subset_value == sp.name) %>%
+      sf::st_coordinates() %>%
+      as.data.frame() %>%
+      dplyr::select(X, Y) %>%
+      rename(decimalLongitude = X,
              decimalLatitude = Y)
     # Subset background points dataframe to species of interest
     # Prep for passing to ENMeval
@@ -363,14 +358,14 @@ maxent_modelGeneration_pipe <- function(occ.sf.pts,
     # Will only run once without resetting R in between
 
     message("Saving SDM.obj to file...")
-    saveRDS(SDM.obj, file = paste0(data.dir, "modelOutput/", sp.name, ".RDS"))
+    saveRDS(SDM.obj, file = paste0(output.dir, "modelOutput/", sp.name, ".RDS"))
     ## Save Model output
 
     if (raster.preds == T) {
 
       message("Saving prediction raster stack to file...")
       terra::writeRaster(SDM.obj@predictions,
-                         filename = paste0(data.dir, "modelOutputRast/", sp.name, ".tif"),
+                         filename = paste0(output.dir, "modelOutputRast/", sp.name, ".tif"),
                          overwrite = T)
       ## Save raster output
       # Need to do this as an R appears to break raster connections when writing to RDS as a whole.
@@ -400,12 +395,10 @@ maxent_modelGeneration_pipe <- function(occ.sf.pts,
 
 #' Validation Pipeline for Maxent Models
 #' @description Runs validation analyses and generates output files for Maxent models created with maxent_pipe()
-#' @param env.vars SpatRaster, environmental variables used in original models
-#' @param occ.sf.pts sf Points object, occurrence records used in original models
 #' @param data.dir Character, path to directory containing model outputs
 #' @param output.dir Character, path to directory for validation outputs
-#' @param raster.preds Logical, whether prediction rasters were generated for each model (default TRUE); controls whether prediction rasters are re-written and thresholded
-#' @param thresh.method Character, threshold method passed to `write_model_threshold()`: "maxsss" (default), "or.10.threshold", or "or.min.threshold"
+#' @param functions.dir Character, path to directory containing validation functions
+#' @param env.vars SpatRaster, environmental variables used in original models
 #' @return None. Saves validation outputs to disk:
 #'   - Environmental correlations
 #'   - Prediction rasters
@@ -416,12 +409,17 @@ maxent_modelGeneration_pipe <- function(occ.sf.pts,
 #' @export
 
 maxent_modelValidation_pipe <- function(env.vars, occ.sf.pts,
+                                        functions.dir = maxent.tools,
                                         data.dir = "data/maxent/",
                                         output.dir = "outputs/maxent/",
                                         raster.preds = T,
                                         thresh.method = "maxsss") {
 
+  source(paste0(functions.dir, "MaxEnt_functions.R"), local = T)
+  # Source Maxent validation functions
+
   sdm.outputs <- load_results(data.dir)
+  # Load model outputs into a list
 
   # Select Best Model -------------------------------------------------------
 
@@ -442,9 +440,9 @@ maxent_modelValidation_pipe <- function(env.vars, occ.sf.pts,
       taxon.name <- SDM.obj@taxon.name
       # Extract model output name
 
-      model <- modelSelection |>
-        dplyr::filter(name == taxon.name) |>
-        dplyr::select(modelSelection) |>
+      model <- modelSelection %>%
+        dplyr::filter(name == taxon.name) %>%
+        dplyr::select(modelSelection) %>%
         as.character()
       # Selects best model from model selection table
 
@@ -504,9 +502,9 @@ maxent_modelValidation_pipe <- function(env.vars, occ.sf.pts,
     # Select model iteration
     taxon.name <- SDM.obj@taxon.name
     # Extract model output name
-    model <- modelSelection |>
-      dplyr::filter(name == taxon.name) |>
-      dplyr::select(modelSelection) |>
+    model <- modelSelection %>%
+      dplyr::filter(name == taxon.name) %>%
+      dplyr::select(modelSelection) %>%
       as.character()
     # Selects best model from model selection table
 
@@ -545,27 +543,23 @@ maxent_modelValidation_pipe <- function(env.vars, occ.sf.pts,
 
 ## Built on Maxent.jar output, but should handle maxnet ok.
 
-#' Maxent Future Prediction Pipeline
-#' @description Pipeline for projecting saved MaxEnt models onto future climate scenarios and writing thresholded prediction rasters to disk
-#' @param env.vars.future SpatRaster or nested list of SpatRasters (time.period > ssp, or time.period > ssp > gcm) of future environmental variables
-#' @param ensemble.climates Logical, whether future climate rasters have been ensembled across GCMs (default TRUE)
-#' @param thresh.method Character, thresholding method passed to `write_model_threshold()` (default "maxsss")
-#' @param data.dir Character, path to data directory containing saved model outputs
-#' @param output.dir Character, path to output directory
-#' @param ensemble.dir Character, path to directory containing ensembled climate rasters (default "data/ensembleFutureEnv")
-#' @return None. Writes future prediction and threshold rasters, and stacked prediction rasters, to disk
-#' @details Loads saved SDM outputs and model selection choices, then for each taxon projects the selected model (via `predict_maxnet()` or `predict_maxentJar()`) onto the supplied future environment(s), writing individual and stacked prediction and threshold rasters to disk. Handles a single SpatRaster, a time > ssp ensemble list, or a time > ssp > gcm list.
-#' @export
+#
+##
+###
 
 maxent_futurePrediction_pipe <- function(env.vars.future,
-                                         ensemble.climates = T,
                                          thresh.method = "maxsss",
                                          data.dir = "data/maxent/",
                                          output.dir = "outputs/maxent/",
-                                         ensemble.dir = "data/ensembleFutureEnv") {
+                                         ensemble.dir = "data/ensembleFutureEnv",
+                                         functions.dir = maxent.tools) {
+
+  source(paste0(functions.dir, "MaxEnt_functions.R"), local = T)
+  # Source Maxent validation functions
 
   sdm.outputs <- load_results(data.dir)
   # Load outputs into a list
+
   modelSelection <- readRDS(paste0(data.dir, "modelSelection.RDS"))
   # Load model selection choices from validation pipeline
 
@@ -589,9 +583,9 @@ maxent_futurePrediction_pipe <- function(env.vars.future,
       # Select model iteration
       taxon.name <- SDM.obj@taxon.name
       # Extract model output name
-      model <- modelSelection |>
-        dplyr::filter(name == taxon.name) |>
-        dplyr::select(modelSelection) |>
+      model <- modelSelection %>%
+        dplyr::filter(name == taxon.name) %>%
+        dplyr::select(modelSelection) %>%
         as.character()
       # Selects best model from model selection table
 
@@ -610,7 +604,7 @@ maxent_futurePrediction_pipe <- function(env.vars.future,
 
       ## Single Future Env -------------------------------------------------------
 
-      if (inherits(future.env, "SpatRaster")) {
+      if (class(future.env) == "SpatRaster") {
         # If spat raster, likely just a single future
 
         future.pred <- switch(SDM.obj@algorithm,
@@ -639,16 +633,16 @@ maxent_futurePrediction_pipe <- function(env.vars.future,
 
       ## Multiple Future Env -----------------------------------------------------
 
-      if (is.list(future.env)) {
+      if (class(future.env) == "list") {
         # If class is a list, likely a collection of future env stacks
 
         ## Detect list depth: gcm (time > ssp > gcm) or ensemble (time > ssp) ##
 
         first.ssp <- future.env[[1]][[1]]
 
-        if (inherits(first.ssp, "SpatRaster")) {
+        if (class(first.ssp) == "SpatRaster") {
           list.depth <- "ensemble"
-        } else if (is.list(first.ssp) && inherits(first.ssp[[1]], "SpatRaster")) {
+        } else if (is.list(first.ssp) && class(first.ssp[[1]]) == "SpatRaster") {
           list.depth <- "gcm"
         } else {
           cli::cli_abort(
@@ -873,6 +867,7 @@ maxent_futurePrediction_pipe <- function(env.vars.future,
 #' @description Generates and evaluates null models for Maxent models created with maxent_pipe()
 #' @param data.dir Character, path to directory containing model outputs
 #' @param output.dir Character, path to directory for null model outputs
+#' @param functions.dir Character, path to directory containing validation functions
 #' @param null.iter Numeric, number of null model iterations to run
 #' @param parallel Logical, whether to enable parallel processing
 #' @param numCores Numeric, number of cores to use for parallel processing
@@ -885,14 +880,19 @@ maxent_futurePrediction_pipe <- function(env.vars.future,
 maxent_nullModel_pipe <- function(null.iter = 1000,
                                   data.dir = "data/maxent/",
                                   output.dir = "outputs/maxent/",
+                                  functions.dir = maxent.tools,
                                   # User parameters
                                   parallel = F,
                                   numCores = 4
                                   # Default parallel settings
 ) {
 
+  source(paste0(functions.dir, "MaxEnt_functions.R"), local = T)
+  # Source Maxent validation functions
+
   sdm.outputs <- load_results(data.dir)
   # Load outputs into a list
+
   modelSelection <- readRDS(paste0(data.dir, "modelSelection.RDS"))
   # Load model selection choices from validation pipeline
 
@@ -902,9 +902,9 @@ maxent_nullModel_pipe <- function(null.iter = 1000,
     # Select model iteration
     taxon.name <- SDM.obj@taxon.name
     # Extract model output name
-    model <- modelSelection |>
-      dplyr::filter(name == taxon.name) |>
-      dplyr::select(modelSelection) |>
+    model <- modelSelection %>%
+      dplyr::filter(name == taxon.name) %>%
+      dplyr::select(modelSelection) %>%
       as.character()
     # Selects best model from model selection table
 
@@ -945,24 +945,18 @@ maxent_nullModel_pipe <- function(null.iter = 1000,
 
 # IN DEV
 
-#' Maxent Results Summary Pipeline (in development)
-#' @description Not yet implemented. Placeholder for a pipeline to generate summary graphs and statistics (site maps, historical/future model maps, threshold overlaps) across a completed modelling run.
-#' @param aoi sf Polygon, area of interest to crop summary maps to (distinct from `study.area`, which is the extent modelling was trained on)
-#' @param study.area sf Polygon, study area polygon used for model training
-#' @param pred.rast SpatRaster, historic model prediction raster(s)
-#' @param pred.rast.future SpatRaster or list, future model prediction raster(s)
-#' @param env.vars SpatRaster, historic environmental variables
-#' @param env.vars.future SpatRaster or list, future environmental variables
-#' @param data.dir Character, path to directory containing model outputs
-#' @param output.dir Character, path to directory for summary outputs
-
 results_pipe <- function(aoi, study.area,
                          pred.rast,
                          pred.rast.future,
                          env.vars,
                          env.vars.future,
                          data.dir = "data/maxent/",
-                         output.dir = "outputs/maxent/"){
+                         output.dir = "outputs/maxent/",
+                         functions.dir = maxent.tools){
+
+  source(paste0(functions.dir, "MaxEnt_functions.R"), local = T)
+  # Source MaxEnt validation functions
+
   # Crop by AOI -------------------------------------------------------------
 
   ## crop all maps to study area for mapping interests
@@ -996,11 +990,6 @@ results_pipe <- function(aoi, study.area,
 ## TODO Extracting these workflows from Future prediction pipeline to simplify processes
 ## I haven't really needed them after full run
 
-#' Reproject Maxent Models to High Resolution (in development)
-#' @description Incomplete/in development. Intended to reproject saved MaxEnt models onto a higher-resolution environmental raster and convert thresholded outputs to sf polygons. Currently references objects (e.g. `sdm.outputs`, `modelSelection`, `repredict.env`, `thresh.method`, `future.env`, `env.vars`, `env.vars.future`) that are not defined within the function's own arguments, so it will not run standalone in its current form.
-#' @param simp.factor Numeric, simplification factor passed to `convert_thresh_toSf()` (default 2000)
-#' @param clamp.env Logical, whether to clamp predictions to the range of the model's training data (default TRUE)
-
 maxent_reprojModels <- function(simp.factor = 2000, clamp.env = T) {
 
   # Env Re-predictions -------------------------------------------------------
@@ -1020,9 +1009,9 @@ maxent_reprojModels <- function(simp.factor = 2000, clamp.env = T) {
       # Select model iteration
       taxon.name <- SDM.obj@taxon.name
       # Extract model output name
-      model <- modelSelection |>
-        dplyr::filter(name == taxon.name) |>
-        dplyr::select(modelSelection) |>
+      model <- modelSelection %>%
+        dplyr::filter(name == taxon.name) %>%
+        dplyr::select(modelSelection) %>%
         as.character()
       # Selects best model from model selection table
 
@@ -1127,10 +1116,10 @@ maxent_reprojModels <- function(simp.factor = 2000, clamp.env = T) {
                        output.name = "predictThreshFutureSf.geojson",
                        simp.factor = simp.factor)
 
-    if (is.list(future.env)) {
-      sf.future.thresh <- sf::st_read(paste0(output.dir, "outputSf/predictThreshFutureSf.geojson"))
+    if (class(future.env) == "list") {
+      sf.future.thresh <- st_read(paste0(output.dir, "outputSf/predictThreshFutureSf.geojson"))
       sf.future.thresh <- split_futureEnvs_sf(sf.future.thresh)
-      sf::st_write(sf.future.thresh, paste0(output.dir, "outputSf/predictThreshFutureSf.geojson"), delete_dsn = T)
+      st_write(sf.future.thresh, paste0(output.dir, "outputSf/predictThreshFutureSf.geojson"), delete_dsn = T)
     }
     # If multiple environments were predicted split out taxonName into time.period, ssp, model etc
 

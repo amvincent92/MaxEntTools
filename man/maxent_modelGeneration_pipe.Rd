@@ -10,6 +10,7 @@ maxent_modelGeneration_pipe(
   bg.areas,
   study.area,
   data.dir,
+  functions.dir = maxent.tools,
   seed = 343,
   java.mem.gb = 16,
   bg.buffer.dist = NULL,
@@ -37,7 +38,7 @@ maxent_modelGeneration_pipe(
 
 \item{study.area}{sf Polygon, study area polygon, must contain all occurrence points.}
 
-\item{data.dir}{Character, path to data directory; subfolders (biasLayer, thinnedRecords, bgAreas, bgPoints, modelOutput, modelOutputRast) are created beneath it for intermediate and final model outputs}
+\item{functions.dir}{Character, path to functions directory}
 
 \item{seed}{Numeric, random seed for reproducibility}
 
@@ -50,8 +51,6 @@ maxent_modelGeneration_pipe(
 \item{subset.col}{Character, column name for subsetting data}
 
 \item{clampStudyArea}{Logical, restrict background areas to within area of interest to reduce computation time}
-
-\item{raster.preds}{Logical, whether to generate and save raster predictions for each model (default TRUE). If FALSE, the modelOutputRast subfolder is not created}
 
 \item{doClamp}{Logical, whether to clamp predictions to avoid extrapolation beyond training data}
 
@@ -70,6 +69,8 @@ maxent_modelGeneration_pipe(
 \item{enable.parallel}{Logical, enable parallel processing}
 
 \item{numCores}{Numeric, number of cores for parallel processing}
+
+\item{output.dir}{Character, path to output directory}
 }
 \value{
 None. Saves model outputs to disk
