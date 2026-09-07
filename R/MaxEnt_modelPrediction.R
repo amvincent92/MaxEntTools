@@ -17,7 +17,7 @@
 #' predict_maxnet(env.vars, SDM.obj, model = "fc.LQ_rm.1", taxon.name = "species_a")
 #' }
 
-predict_maxnet <- function(env.vars, SDM.obj, model, taxon.name, clamp.env = T) {
+predict_maxnet <- function(env.vars, SDM.obj, model, taxon.name, clamp.env = TRUE) {
 
   if (!requireNamespace("maxnet", quietly = TRUE)) {
     stop("Package 'maxnet' is required for predict_maxnet() but is not installed.")
@@ -78,7 +78,7 @@ predict_maxentJar <- function(env.vars, SDM.obj, model, taxon.name) {
   best.model <- ENMeval::eval.models(SDM.obj)[[model]]
   # Extract model for best model
 
-  message("Generating prediction: ", taxon.name)
+  cli::cli_inform("Generating prediction: {.val {taxon.name}}")
 
   future.pred <- dismo::predict(best.model, env.vars, args = c("outputformat=cloglog"))
   # Should be able to getaway with not clamping in maxent.jar as default "should" be to do it
@@ -161,7 +161,7 @@ ensemble_modelFutures <- function(rast.list){
 
       for(ssp in ssps) {
 
-        message("Creating ensembles of ", species, ": ", period, ": ", ssp)
+        cli::cli_inform("Creating ensembles of {.val {species}}: {.val {period}}: {.val {ssp}}")
 
         ## Average each model in output
 
@@ -298,17 +298,17 @@ threshold_ensembleFutures <- function(future.pred.ensemble, data.dir = "data/max
 
 converge_ensemble <- function(rast.ensemble, models.threshold = 1){
 
-  message("Prepping ensemble thresholds for divraster...")
+  cli::cli_inform("Prepping ensemble thresholds for divraster...")
 
   for (i in seq_along(names(rast.ensemble))) {
 
     taxon.name <- names(rast.ensemble)[[i]]
-    print(taxon.name)
+    cli::cli_inform("Processing: {.val {taxon.name}}")
 
     for (y in seq_along(names(rast.ensemble[[i]]))) {
 
       time.period <- names(rast.ensemble[[i]])[[y]]
-      print(time.period)
+      cli::cli_inform("  Period: {.val {time.period}}")
 
       for (z in seq_along(names(rast.ensemble[[i]][[y]]))) {
 
@@ -419,3 +419,184 @@ calc_species_richness <- function(rast.stack) {
   return(richness)
 
 }
+
+
+#' Calculate Diversity Metrics from Thresholded Predictions
+#'
+#' @description Computes beta diversity, habitat change, species loss, and habitat loss metrics from thresholded species distribution model predictions using the divraster package
+#' @param rast.thresh SpatRaster stack of thresholded (binary) historical species distributions, with one layer per species
+#' @param rast.future.species.converge Nested list of future thresholded prediction rasters structured as `rast.future.species.converge[[time.period]][[scenario]]`, where each element is a multi-layer raster stack with one layer per species
+#' @return List with four elements:
+#'   - `betadiv`: Beta diversity metrics for each time period and scenario
+#'   - `habitat.change`: Categorical habitat change (Gain/Loss/No Change/Unsuitable) for each species, time period, and scenario
+#'   - `species.lost`: Count of species lost at each location for each time period and scenario (numeric)
+#'   - `habitat.loss`: Data frame of habitat area change for each species per time period and scenario
+#' @details Internally applies four nested calculations via helper functions:
+#'   - `calc_betadiv()`: Temporal beta diversity using `divraster::temp.beta()`
+#'   - `calc_habitat_change()`: Habitat suitability change using `divraster::suit.change()`
+#'   - `calc_species_loss()`: Species loss via `divraster::differ.rast()` and `divraster::spat.alpha2()`
+#'   - `calc_habitat_loss()`: Habitat area loss via `divraster::area.calc()` with historical/future comparison
+#'   Each metric is calculated for every time period and scenario combination, with progress messages issued via `cli::cli_inform()`
+#' @examples
+#' \dontrun{
+#' # Requires thresholded rasters (rast.thresh) and future predictions (rast.future.species.converge)
+#' diversity.metrics <- process_divraster(rast.thresh = historical.binary.rast,
+#'                                        rast.future.species.converge = future.convergence.list)
+#' }
+#' @export
+
+process_divraster <- function(rast.thresh, rast.future.species.converge) {
+
+  cli::cli_inform("Calculating divraster metrics...")
+  output.list <- list()
+  # Create shell lists for all outputs
+
+  ### Calculate Beta Div ------------------------------------------------------
+
+  calc_betadiv <- function(rast.thresh, rast.future.species.converge) {
+
+    betadiv.list <- list()
+    cli::cli_inform("Calculating beta diversity for each time period and SSP...")
+
+    for (timeperiod in names(rast.future.species.converge)) {
+      for (ssp in names(rast.future.species.converge[[timeperiod]])) {
+
+        cli::cli_inform("Processing... {.val {timeperiod}}, {.val {ssp}}")
+
+        betadiv <- divraster::temp.beta(rast.thresh,
+                                        rast.future.species.converge[[timeperiod]][[ssp]])
+
+        betadiv.list[[timeperiod]][[ssp]] <- betadiv
+
+      }
+    }
+
+    return(betadiv.list)
+
+  }
+  # Function for calculating beta diversity for each time period and ssp
+
+  betadiv <- calc_betadiv(rast.thresh, rast.future.species.converge)
+
+  ### Suitability change ------------------------------------------------------
+
+  calc_habitat_change <- function(rast.thresh, rast.future.species.converge) {
+
+    habitat.change.list <- list()
+    cli::cli_inform("Calculating habitat change for each species, time period, and SSP...")
+
+    for (timeperiod in names(rast.future.species.converge)) {
+      for (ssp in names(rast.future.species.converge[[timeperiod]])) {
+
+        cli::cli_inform("Processing... {.val {timeperiod}}, {.val {ssp}}")
+
+        habitat.change <- divraster::suit.change(rast.thresh,
+                                                 rast.future.species.converge[[timeperiod]][[ssp]])
+
+        species.names <- names(habitat.change)
+        # Store species names before levels<- overwrites them
+
+        cover.levels <- data.frame(id=1:4, cover=c("Gain", "Loss", "No Change", "Unsuitable"))
+        levels(habitat.change) <- rep(list(cover.levels), terra::nlyr(habitat.change))
+        # A single data.frame only categorises layer 1; a list of one per layer
+        # applies it to all layers
+
+        names(habitat.change) <- species.names
+        # Restore species names, which levels<- overwrites with the label column name
+
+        habitat.change.list[[timeperiod]][[ssp]] <- habitat.change
+
+      }
+    }
+
+    return(habitat.change.list)
+
+  }
+  # Function for calculating habitat change for each spceies for time period and ssp
+
+  habitat.change <- calc_habitat_change(rast.thresh, rast.future.species.converge)
+
+  ### Calculate Species Lost (n) ---------------------------------------------------------
+
+  calc_species_loss <- function(rast.thresh, rast.future.species.converge) {
+
+    species.loss.list <- list()
+    cli::cli_inform("Calculating predicted species lost for time period and SSP...")
+
+    for (timeperiod in names(rast.future.species.converge)) {
+      for (ssp in names(rast.future.species.converge[[timeperiod]])) {
+
+        cli::cli_inform("Processing... {.val {timeperiod}}, {.val {ssp}}")
+
+        species.lost <- divraster::differ.rast(divraster::spat.alpha2(rast.thresh),
+                                               divraster::spat.alpha2(rast.future.species.converge[[timeperiod]][[ssp]]),
+                                               perc = FALSE)
+
+        species.loss.list[[timeperiod]][[ssp]] <- species.lost
+
+      }
+    }
+
+    return(species.loss.list)
+
+  }
+  # Function for calculating species lost for each time period and ssp
+
+  species.lost <- calc_species_loss(rast.thresh, rast.future.species.converge)
+
+  ### Calculate Habitat Loss (Area) ------------------------------------------------------------
+
+  calc_habitat_loss <- function(rast.thresh, rast.future.species.converge) {
+
+    habitat.loss.list <- list()
+    cli::cli_inform("Calculating habitat loss (area) for each species, time period, and SSP...")
+    # Create shell list structure for output tables
+
+    habitat.historic <- divraster::area.calc(rast.thresh)
+    habitat.historic <- habitat.historic |>
+      dplyr::rename(species = Layer,
+                    hist.area = Area)
+    # Create historic area calculations
+
+    for (timeperiod in names(rast.future.species.converge)) {
+      for (ssp in names(rast.future.species.converge[[timeperiod]])) {
+
+        cli::cli_inform("Processing... {.val {timeperiod}}, {.val {ssp}}")
+
+        habitat.future <- divraster::area.calc(rast.future.species.converge[[timeperiod]][[ssp]])
+
+        habitat.joined <- cbind(habitat.historic, habitat.future$Area)
+        habitat.joined <- habitat.joined |>
+          dplyr::rename(future.area = "habitat.future$Area")
+        # Add future distribution to tables
+
+        habitat.joined$loss <- habitat.joined$hist.area - habitat.joined$future.area
+        habitat.joined$loss <- habitat.joined$loss * -1
+        # Calculate difference between historic and future
+
+        habitat.loss.list[[timeperiod]][[ssp]] <- habitat.joined
+        # Join table to list structure
+
+      }
+    }
+
+    return(habitat.loss.list)
+
+  }
+  # Function for calculating area lost each species for time period and ssp
+
+  habitat.loss <- calc_habitat_loss(rast.thresh, rast.future.species.converge)
+
+  ### Stack outputs ------------------------------------------------------------
+
+  output.list[[1]] <- betadiv
+  output.list[[2]] <- habitat.change
+  output.list[[3]] <- species.lost
+  output.list[[4]] <- habitat.loss
+
+  names(output.list) <- c("betadiv", "habitat.change", "species.lost", "habitat.loss")
+
+  return(output.list)
+
+}
+# Parent function for all divraster/betadiversity calculations

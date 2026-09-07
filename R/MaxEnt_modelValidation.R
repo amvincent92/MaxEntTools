@@ -20,13 +20,13 @@
 
 write_var_contrib <- function(SDM.obj, model, output.dir, data.dir) {
 
-  if(dir.exists(output.dir) == F){
-    dir.create(output.dir, recursive = T)
+  if (!dir.exists(output.dir)){
+    dir.create(output.dir, recursive = TRUE)
   }
   # Create output folder
 
-  if(dir.exists(data.dir) == F){
-    dir.create(data.dir, recursive = T)
+  if (!dir.exists(data.dir)){
+    dir.create(data.dir, recursive = TRUE)
   }
   # Create data folder
 
@@ -39,7 +39,7 @@ write_var_contrib <- function(SDM.obj, model, output.dir, data.dir) {
     # plotting Variable Contribution for the best model
     ## Basic plot of the variable importance
 
-    message(paste0("Writing variable contribution graph to file: ", taxon.name))
+    cli::cli_inform("Writing variable contribution graph to file: {.val {taxon.name}}")
 
     var.df <- SDM.obj@variable.importance[[model]]
     # Extract variable importance from object
@@ -64,7 +64,7 @@ write_var_contrib <- function(SDM.obj, model, output.dir, data.dir) {
   # Maxent.jar method
 
   if (SDM.obj@algorithm == "maxnet") {
-    message("Variable contribution not availible for maxnet models, skipping...")
+    cli::cli_inform("Variable contribution not availible for maxnet models, skipping...")
   }
 
 }
@@ -87,13 +87,13 @@ write_var_contrib <- function(SDM.obj, model, output.dir, data.dir) {
 
 write_response_curves <- function(SDM.obj, model, output.dir, data.dir) {
 
-  if(dir.exists(output.dir) == F){
-    dir.create(output.dir, recursive = T)
+  if (!dir.exists(output.dir)){
+    dir.create(output.dir, recursive = TRUE)
   }
   # Create output folder
 
-  if(dir.exists(data.dir) == F){
-    dir.create(data.dir, recursive = T)
+  if (!dir.exists(data.dir)){
+    dir.create(data.dir, recursive = TRUE)
   }
   # Create data folder
 
@@ -105,7 +105,7 @@ write_response_curves <- function(SDM.obj, model, output.dir, data.dir) {
 
   ## Method Maxent.jar #
 
-  message(paste0("Writing response curves to file: ", taxon.name))
+  cli::cli_inform("Writing response curves to file: {.val {taxon.name}}")
 
   if (SDM.obj@algorithm == "maxent.jar") {
 

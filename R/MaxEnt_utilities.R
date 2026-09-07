@@ -520,8 +520,8 @@ write_sdm_rast <- function(output.dir, SDM.obj, model) {
 
 write_model_threshold <- function(output.dir, SDM.obj, thresh.method = "maxsss", model, filename = NULL, future.pred = NULL){
 
-  if(dir.exists(output.dir) == F){
-    dir.create(output.dir, recursive = T)
+  if (!dir.exists(output.dir)){
+    dir.create(output.dir, recursive = TRUE)
   }
   # Create output folder
 

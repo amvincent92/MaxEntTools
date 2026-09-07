@@ -11,7 +11,7 @@ generate_nullModels(
   taxon.name,
   iter,
   null.iter = 100,
-  parallel = F,
+  parallel = FALSE,
   numCores = 4
 )
 }

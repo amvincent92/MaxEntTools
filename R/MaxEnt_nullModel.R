@@ -26,10 +26,10 @@
 #' nulls <- generate_nullModels("output/nulls/", sdm_result, null.iter = 100)
 #' }
 
-generate_nullModels <- function(output.dir, SDM.obj, model, taxon.name, iter, null.iter = 100, parallel = F, numCores = 4){
+generate_nullModels <- function(output.dir, SDM.obj, model, taxon.name, iter, null.iter = 100, parallel = FALSE, numCores = 4){
 
-  if(dir.exists(output.dir) == F){
-    dir.create(output.dir, recursive = T)
+  if (!dir.exists(output.dir)){
+    dir.create(output.dir, recursive = TRUE)
   }
   # Create output folder
 
@@ -41,7 +41,7 @@ generate_nullModels <- function(output.dir, SDM.obj, model, taxon.name, iter, nu
     as.numeric()
   # Extract parameters from best model
 
-  message("Simulating null model for: ", taxon.name)
+  cli::cli_inform("Simulating null model for: {.val {taxon.name}}")
   mod.null <- ENMeval::ENMnulls(SDM.obj, mod.settings = list(fc = fc, rm = rm), no.iter = null.iter,
                        parallel = parallel, numCores = numCores)
   # Generate null based on best fit model
@@ -84,8 +84,8 @@ plot_nullModels <- function(output.dir, mod.null, SDM.obj, taxon.name) {
 
   ## Histogram
 
-  if(dir.exists(paste0(output.dir, "evalHistogram/")) == F){
-    dir.create(paste0(output.dir, "evalHistogram/"), recursive = T)
+  if (!dir.exists(paste0(output.dir, "evalHistogram/"))){
+    dir.create(paste0(output.dir, "evalHistogram/"), recursive = TRUE)
   }
   # Create output folder
 
@@ -93,19 +93,19 @@ plot_nullModels <- function(output.dir, mod.null, SDM.obj, taxon.name) {
                                     # stats = c("auc.val", "auc.diff", "cbi.val", "or.mtp", "or.10p"),
                                     stats = c("or.10p", "cbi.val", "auc.val"),
                                     plot.type = "histogram",
-                                    return.tbl = F))
+                                    return.tbl = FALSE))
 
   if (exists("output.plot")) {
     ggplot2::ggsave(plot = output.plot, filename = paste0(output.dir, "evalHistogram/", taxon.name, ".jpeg"),
            height = 8, width = 6)
   } else {
-    message(paste0("Unable to plot null outputs for: ", taxon.name))
+    cli::cli_inform("Unable to plot null outputs for: {.val {taxon.name}}")
   }
 
   ## Violin Plots
 
-  if(dir.exists(paste0(output.dir, "evalViolin/")) == F){
-    dir.create(paste0(output.dir, "evalViolin/"), recursive = T)
+  if (!dir.exists(paste0(output.dir, "evalViolin/"))){
+    dir.create(paste0(output.dir, "evalViolin/"), recursive = TRUE)
   }
   # Create output folder
 
@@ -113,13 +113,13 @@ plot_nullModels <- function(output.dir, mod.null, SDM.obj, taxon.name) {
                                     # stats = c("auc.val", "auc.diff", "cbi.val", "or.mtp", "or.10p"),
                                     stats = c("or.10p", "cbi.val", "auc.val"),
                                     plot.type = "violin",
-                                    return.tbl = F))
+                                    return.tbl = FALSE))
 
   if (exists("output.plot")) {
     ggplot2::ggsave(plot = output.plot, filename = paste0(output.dir, "evalViolin/", taxon.name, ".jpeg"),
            height = 8, width = 6)
   } else {
-    message(paste0("Unable to plot null outputs for: ", taxon.name))
+    cli::cli_inform("Unable to plot null outputs for: {.val {taxon.name}}")
   }
 
   # Save output null summary graphs

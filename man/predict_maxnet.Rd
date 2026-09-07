@@ -4,7 +4,7 @@
 \alias{predict_maxnet}
 \title{Generate MaxEnt Prediction Using Maxnet}
 \usage{
-predict_maxnet(env.vars, SDM.obj, model, taxon.name, clamp.env = T)
+predict_maxnet(env.vars, SDM.obj, model, taxon.name, clamp.env = TRUE)
 }
 \arguments{
 \item{env.vars}{SpatRaster of environmental predictor layers to predict onto}
