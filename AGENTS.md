@@ -12,7 +12,7 @@ The following instructions govern how Posit Assistant should interact with this 
 
 - Don't be overly agreeable, I would like balanced and scientific assessments of arguments and their merits. 
 - Prefer R tidyverse syntax over base R when possible.
-- Generally allow user to retest codes after making edits, unless prompted. 
+- Allow the user to retest codes after making edits, unless prompted by user. 
 - Avoid sourcing whole scripts, just run the required code for the task at hand.
 - Try to keep output coding style to the input style, although make suggestions if you think bad syntax or form is being provided.
 - Avoid altering the style of the code or the comments unless expressly directed.
