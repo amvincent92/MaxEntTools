@@ -133,6 +133,64 @@ overlap_ensemble_dist.dep <- function(hist.pred.rast.thresh, future.thresh.ensem
 # Could be accomplished with a simple mask or crop, but this fills in gaps within the distribution as well.
 # Also is designed for ease of looping over and subsetting.
 
+ensemble_overlap_maps.dep <- function(pred.rast.thresh, pred.rast.future.thresh.ensemble) {
+
+  message("Creating ensemble overlap maps...")
+
+  for (i in seq_along(names(pred.rast.thresh))) {
+
+    taxon.name <- names(pred.rast.thresh)[[i]]
+    print(taxon.name)
+
+    for (y in seq_along(names(pred.rast.future.thresh.ensemble[[i]]))) {
+
+      time.period <- names(pred.rast.future.thresh.ensemble[[i]])[[y]]
+      print(time.period)
+
+      for (z in seq_along(names(pred.rast.future.thresh.ensemble[[i]][[y]]))) {
+
+        ssp <- names(pred.rast.future.thresh.ensemble[[i]][[y]])[[z]]
+        print(ssp)
+
+        dist.rast <- overlap_ensemble_dist(pred.rast.thresh,
+                                           pred.rast.future.thresh.ensemble,
+                                           species.idx = i,
+                                           time.idx =  y,
+                                           scenario.idx = z)
+
+        ## Plotting ##
+
+        gg.plot <- ggplot() +
+          geom_spatraster(data = dist.rast, na.rm = T) +
+          layer_alpsFrame() +
+          scale_fill_viridis_c(na.value = "transparent", name = "") +
+          ggtitle("Ensemble Alignment",
+                  subtitle = paste0(taxon.name, ": ", ssp, ": ", time.period)) +
+          theme(plot.margin = margin(0.1, 0.1, 0.1, 0.1, "cm"),
+                # legend.position = "none",
+                axis.text = element_text(size = 12),
+                plot.title = element_text(size = 14),
+                plot.subtitle = element_text(size = 12))
+
+        # plotCombined <- ggarrange(plot1, plot2, plot3, plot4, plot5, plot6, ncol = 2, nrow = 3, common.legend = TRUE, legend = "right") +
+        #   theme(legend.text = element_text(size = 12),
+        #         legend.title = element_text(size = 14))
+        #
+
+        ensure_dir("outputs/figures/ensembleOverlap/")
+
+        ggsave(paste0("outputs/figures/ensembleOverlap/",
+                      taxon.name, "_",
+                      time.period, "_",
+                      ssp, ".jpeg"), gg.plot, width = 6, height = 6)
+
+      }
+    }
+  }
+
+}
+# Parent function for implimenting above ensemble overlaps.
+# Neither of these needed after I ke[]
 
 #' Create Ensemble Predictions Across Future Scenarios
 #'

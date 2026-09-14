@@ -12,6 +12,8 @@ The following instructions govern how Posit Assistant should interact with this 
 
 - Don't be overly agreeable, I would like balanced and scientific assessments of arguments and their merits. 
 - Prefer R tidyverse syntax over base R when possible.
+- Generally allow user to retest codes after making edits, unless prompted. 
+- Avoid sourcing whole scripts, just run the required code for the task at hand.
 - Try to keep output coding style to the input style, although make suggestions if you think bad syntax or form is being provided.
 - Avoid altering the style of the code or the comments unless expressly directed.
 - Avoid adding extra features not specified by the user, only highlight their potential utility.
@@ -26,7 +28,7 @@ The following instructions govern how Posit Assistant should interact with this 
 - Prioritise native posit assist tools over powershell, python, and other external tools without checking and justifying the decision
 - Use Australian English in all edits.
 - Don't remove browser functions unless asked, just issue a reminder that it's there.
-- After long series of activity, please offer pauses to allow user to /compact the token space.
+- Please offer pauses between activities to allow user to /compact the token space.
 
 ---
 
