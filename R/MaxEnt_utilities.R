@@ -340,7 +340,7 @@ rast_naZero <- function(x, reference) {
 #' }
 #' @export
 
-load_results <- function(data.dir) {
+load_results <- function(data.dir = "data/maxent/") {
 
   message("Loading ENMeval results...")
 
