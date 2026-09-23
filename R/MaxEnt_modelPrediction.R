@@ -91,6 +91,99 @@ predict_maxentJar <- function(env.vars, SDM.obj, model, taxon.name) {
 
 }
 
+# Maxnet solution
+
+predict_maxnet_withAgg.experimental <- function(env.vars, SDM.obj, model, taxon.name, clamp.env = T, agg.fact = NULL) {
+
+  library(maxnet)
+  # https://github.com/jamiemkass/ENMeval/issues/117
+
+  if (!is.null(agg.fact)) {
+    message("Aggregating env.vars by a factor of ", agg.fact, " before prediction...")
+    cat.vars <- names(env.vars)[terra::is.factor(env.vars)]
+    if (length(cat.vars) > 0) {
+      cont.rast <- terra::aggregate(env.vars[[base::setdiff(names(env.vars), cat.vars)]], fact = agg.fact, fun = "mean", na.rm = TRUE)
+      cat.rast <- terra::aggregate(env.vars[[cat.vars]], fact = agg.fact, fun = "modal", na.rm = TRUE)
+      env.vars <- c(cont.rast, cat.rast)
+      # Categorical layers aggregated with the modal value, not mean
+      # enm.maxnet@predict() matches variables by name, so recombined layer order doesn't matter
+    } else {
+      env.vars <- terra::aggregate(env.vars, fact = agg.fact, fun = "mean", na.rm = TRUE)
+    }
+    # Use the SAME agg.fact as any calc_mess() call on the same env.vars/taxon
+    # so the resulting prediction and MESS rasters share an identical grid
+  }
+
+  best.model <- eval.models(SDM.obj)[[model]]
+  # Extract model for best model
+
+  message("Generating prediction: ", taxon.name)
+
+  future.pred <- enm.maxnet@predict(best.model, env.vars, list(pred.type ="cloglog", doClamp = clamp.env))
+  # Project model onto future climate, allow choice of clamping to be passed up the stack.
+
+  names(future.pred) <- taxon.name
+  # Change name from model type to name of taxon
+
+  return(future.pred)
+
+  ## SUPERSEDED
+  # if (clamp.env = T) {
+  #
+  #   pts <- dplyr::bind_rows(SDM.obj@occs[1:2], SDM.obj@bg[1:2])
+  #   v <- terra::extract(env.vars, pts, method = 'simple', na.rm = TRUE)
+  #   # Extract occurrence and background points to clamp the model
+  #   # Model clamping means that environmental variation is clamped to those the model was trained in
+  #   # Stops the model extrapolating beyond it's training data. (considered bad practice)
+  #
+  #   env.vars <- clamp.vars(env.vars, v, left = NULL, right = NULL, categoricals = NULL)
+  #   # Clamp future scenario variables by occurrence locations
+  #   # derive future scenario predictions using optimal model
+  #
+  # }
+  # ## Is this needed now that clamp option is in following function?
+  # Manual method for clamping variables.
+  # Made obsolete with doClamp in following function
+
+}
+
+## Maxent.jar solution
+
+predict_maxentJar_withAgg.experimental <- function(env.vars, SDM.obj, model, taxon.name, agg.fact = NULL) {
+
+  library(dismo)
+
+  if (!is.null(agg.fact)) {
+    message("Aggregating env.vars by a factor of ", agg.fact, " before prediction...")
+    cat.vars <- names(env.vars)[terra::is.factor(env.vars)]
+    if (length(cat.vars) > 0) {
+      cont.rast <- terra::aggregate(env.vars[[base::setdiff(names(env.vars), cat.vars)]], fact = agg.fact, fun = "mean", na.rm = TRUE)
+      cat.rast <- terra::aggregate(env.vars[[cat.vars]], fact = agg.fact, fun = "modal", na.rm = TRUE)
+      env.vars <- c(cont.rast, cat.rast)
+      # Categorical layers aggregated with the modal value, not mean
+    } else {
+      env.vars <- terra::aggregate(env.vars, fact = agg.fact, fun = "mean", na.rm = TRUE)
+    }
+    # Use the SAME agg.fact as any calc_mess() call on the same env.vars/taxon
+    # so the resulting prediction and MESS rasters share an identical grid
+  }
+
+  best.model <- eval.models(SDM.obj)[[model]]
+  # Extract model for best model
+
+  message("Generating prediction: ", taxon.name)
+
+  future.pred <- dismo::predict(best.model, env.vars, args = c("outputformat=cloglog"))
+  # Should be able to getaway with not clamping in maxent.jar as default "should" be to do it
+  # Would be nice to confirm 100%, but does appear to be the default from some light googling
+
+  names(future.pred) <- taxon.name
+  # Change name from model type to name of taxon
+
+  return(future.pred)
+
+}
+
 # Ensemble Futures ---------------------------------------------------------
 
 #' Calculate Overlap Between Historic and Future Suitability (deprecated)
