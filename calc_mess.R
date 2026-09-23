@@ -86,9 +86,45 @@ calc_mess <- function(SDM.obj, future.rast, taxon.name, full = FALSE, agg.fact =
 
 }
 
+## Function: render and save a single MESS map from a precomputed raster ##
+
+render_messMap <- function(mess.rast, taxon.name, timeperiod, ssp, limits = NULL) {
+
+  # Builds and saves the ggplot for one precomputed MESS raster. limits
+  # optionally fixes the viridis colour scale (e.g. to a taxon's own min/max
+  # across its timeperiod x ssp combinations) so that a set of maps for the
+  # same taxon share a standardised legend, rather than each map auto-scaling
+  # to its own range. oob = scales::squish clamps any values outside limits
+  # to the nearest end colour rather than showing them as NA.
+
+  gg.plot <- ggplot() +
+    geom_spatraster(data = mess.rast) +
+    scale_fill_viridis_c(na.value = "transparent", name = "MESS",
+                         limits = limits, oob = scales::squish) +
+    ggtitle(paste0(taxon.name, ", ", timeperiod, ", ", ssp)) +
+    theme_minimal()
+
+  taxon.filename <- taxon.name |>
+    stringr::str_replace_all("[[:space:]\\(\\)\\.]+", "_") |>
+    stringr::str_replace_all("_+$", "")
+  # Sanitise taxon name for use in a file path
+
+  mess.dir <- paste0("outputs/mess/", taxon.filename, "/", timeperiod, "/")
+
+  if (dir.exists(mess.dir) == FALSE) {
+    dir.create(mess.dir, recursive = TRUE)
+  }
+
+  ggsave(filename = paste0(mess.dir, taxon.filename, "_", timeperiod, "_", ssp, ".jpeg"),
+         plot = gg.plot, width = 7, height = 5, bg = "white")
+
+  return(gg.plot)
+
+}
+
 ## Function: single MESS map for one taxon x timeperiod x ssp ##
 
-plot_messMap <- function(taxon.name, timeperiod, ssp, agg.fact = NULL, mask.poly = NULL) {
+plot_messMap <- function(taxon.name, timeperiod, ssp, agg.fact = NULL, mask.poly = NULL, limits = NULL) {
 
   # Calculates and plots a MESS surface for one taxon under one future
   # timeperiod x ssp combination, saving to
@@ -99,6 +135,9 @@ plot_messMap <- function(taxon.name, timeperiod, ssp, agg.fact = NULL, mask.poly
   # than after reduces the extent/cell count going into aggregation and the
   # MESS calculation itself, rather than computing over the full raster and
   # discarding cells outside mask.poly afterwards.
+  # limits optionally fixes the colour scale, e.g. to match a shared range
+  # from generate_messMaps(). Defaults to NULL, which lets scale_fill_viridis_c
+  # auto-scale to this single map's own range.
 
   future.rast <- future.env[[timeperiod]][[ssp]]
 
@@ -130,25 +169,7 @@ plot_messMap <- function(taxon.name, timeperiod, ssp, agg.fact = NULL, mask.poly
     agg.fact = agg.fact
   )
 
-  gg.plot <- ggplot() +
-    geom_spatraster(data = mess.rast) +
-    scale_fill_viridis_c(na.value = "transparent", name = "MESS") +
-    ggtitle(paste0(taxon.name, ", ", timeperiod, ", ", ssp)) +
-    theme_minimal()
-
-  taxon.filename <- taxon.name |>
-    stringr::str_replace_all("[[:space:]\\(\\)\\.]+", "_") |>
-    stringr::str_replace_all("_+$", "")
-  # Sanitise taxon name for use in a file path
-
-  mess.dir <- paste0("outputs/mess/", taxon.filename, "/", timeperiod, "/")
-
-  if (dir.exists(mess.dir) == FALSE) {
-    dir.create(mess.dir, recursive = TRUE)
-  }
-
-  ggsave(filename = paste0(mess.dir, taxon.filename, "_", timeperiod, "_", ssp, ".jpeg"),
-         plot = gg.plot, width = 7, height = 5, bg = "white")
+  gg.plot <- render_messMap(mess.rast, taxon.name, timeperiod, ssp, limits = limits)
 
   return(gg.plot)
 
@@ -165,26 +186,76 @@ generate_messMaps <- function(taxon.list = names(sdm.results),
   # Generates MESS maps for every combination of taxon.list x timeperiods x
   # ssps, allowing a subset of taxa/time periods/ssps to be requested rather
   # than always plotting the full taxon x 3 x 3 combination set.
+  # For each taxon, MESS is calculated for every timeperiod x ssp combination
+  # first and cached in mess.rast.list, so that a single shared colour scale
+  # (taxon.limits) can be derived across that taxon's own combinations before
+  # any of its maps are rendered. This standardises the legend within a taxon
+  # without imposing one fixed scale across all taxa, whose MESS ranges differ
+  # substantially between species.
+
+  if (!is.null(mask.poly) && (inherits(mask.poly, "sf") || inherits(mask.poly, "sfc"))) {
+    mask.poly <- terra::vect(mask.poly)
+  }
+  # Coerce once up front, outside the loops below
 
   cli::cli_progress_bar("Generating MESS maps",
                         total = length(taxon.list) * length(timeperiods) * length(ssps))
 
   for (taxon.name in taxon.list) {
+
+    mess.rast.list <- list()
+
     for (timeperiod in timeperiods) {
       for (ssp in ssps) {
 
-        plot_messMap(taxon.name, timeperiod, ssp, agg.fact = agg.fact, mask.poly = mask.poly)
+        future.rast <- future.env[[timeperiod]][[ssp]]
+
+        if (!is.null(mask.poly)) {
+
+          if (!terra::same.crs(future.rast, mask.poly)) {
+            cli::cli_abort("mask.poly CRS does not match future.rast CRS. Reproject mask.poly before calling {.fn generate_messMaps}.")
+          }
+          # Flag CRS mismatch rather than silently reprojecting, since reprojecting
+          # a vector mask on the fly can mask misaligned inputs upstream
+
+          future.rast <- future.rast |>
+            terra::crop(mask.poly) |>
+            terra::mask(mask.poly)
+          # Crop first to reduce the extent before masking
+
+        }
+
+        mess.rast.list[[timeperiod]][[ssp]] <- calc_mess(
+          SDM.obj = sdm.results[[taxon.name]],
+          future.rast = future.rast,
+          taxon.name = taxon.name,
+          full = FALSE,
+          agg.fact = agg.fact
+        )
 
         cli::cli_progress_update()
 
       }
     }
+
+    taxon.vals <- unlist(lapply(mess.rast.list, function(tp.list) {
+      lapply(tp.list, function(r) terra::values(r, na.rm = TRUE))
+    }))
+    taxon.limits <- range(taxon.vals)
+    # Flatten every timeperiod x ssp combo's cell values for this taxon into a
+    # single vector, giving one shared colour scale range across all of its maps
+
+    for (timeperiod in timeperiods) {
+      for (ssp in ssps) {
+
+        render_messMap(mess.rast.list[[timeperiod]][[ssp]], taxon.name, timeperiod, ssp,
+                       limits = taxon.limits)
+
+      }
+    }
+
   }
 
   cli::cli_progress_done()
 
 }
-
-generate_messMaps(taxon.list = names(alps)[str_detect(string = names(alps), pattern = "pauciflora")],
-                  mask.poly = ibra.buffer)
-# Generate just Snow gum maps
