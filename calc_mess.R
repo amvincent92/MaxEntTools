@@ -88,7 +88,8 @@ calc_mess <- function(SDM.obj, future.rast, taxon.name, full = FALSE, agg.fact =
 
 ## Function: render and save a single MESS map from a precomputed raster ##
 
-plot_messMap <- function(mess.rast, taxon.name, timeperiod, ssp, limits = NULL) {
+plot_messMap <- function(mess.rast, taxon.name, timeperiod, ssp, limits = NULL,
+                         output.dir = "outputs/mess/") {
 
   # Builds and saves the ggplot for one precomputed MESS raster. limits
   # optionally fixes the viridis colour scale (e.g. to a taxon's own min/max
@@ -96,6 +97,8 @@ plot_messMap <- function(mess.rast, taxon.name, timeperiod, ssp, limits = NULL) 
   # same taxon share a standardised legend, rather than each map auto-scaling
   # to its own range. oob = scales::squish clamps any values outside limits
   # to the nearest end colour rather than showing them as NA.
+  # output.dir sets the base directory maps are saved under, with
+  # taxon.filename/timeperiod subdirectories created beneath it.
 
   gg.plot <- ggplot() +
     geom_spatraster(data = mess.rast) +
@@ -109,7 +112,7 @@ plot_messMap <- function(mess.rast, taxon.name, timeperiod, ssp, limits = NULL) 
     stringr::str_replace_all("_+$", "")
   # Sanitise taxon name for use in a file path
 
-  mess.dir <- paste0("outputs/mess/", taxon.filename, "/", timeperiod, "/")
+  mess.dir <- paste0(output.dir, taxon.filename, "/", timeperiod, "/")
 
   if (dir.exists(mess.dir) == FALSE) {
     dir.create(mess.dir, recursive = TRUE)
@@ -181,11 +184,14 @@ generate_messMaps <- function(taxon.list = names(sdm.results),
                               timeperiods = names(future.env),
                               ssps = names(future.env[[1]]),
                               agg.fact = NULL,
-                              mask.poly = NULL) {
+                              mask.poly = NULL,
+                              output.dir = "outputs/figures/mess/") {
 
   # Generates MESS maps for every combination of taxon.list x timeperiods x
   # ssps, allowing a subset of taxa/time periods/ssps to be requested rather
   # than always plotting the full taxon x 3 x 3 combination set.
+  # output.dir sets the base directory maps are saved under, passed through
+  # to plot_messMap().
   # masking and aggregation of future.rast depend only on timeperiod x ssp,
   # not on taxon.name, so they are done once per timeperiod x ssp combination
   # up front and cached in env.cache, rather than being redone inside
@@ -285,7 +291,7 @@ generate_messMaps <- function(taxon.list = names(sdm.results),
       for (ssp in ssps) {
 
         plot_messMap(mess.rast.list[[timeperiod]][[ssp]], taxon.name, timeperiod, ssp,
-                     limits = taxon.limits)
+                     limits = taxon.limits, output.dir = output.dir)
 
       }
     }
