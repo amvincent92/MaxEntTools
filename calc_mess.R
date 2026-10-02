@@ -88,7 +88,7 @@ calc_mess <- function(SDM.obj, future.rast, taxon.name, full = FALSE, agg.fact =
 
 ## Function: render and save a single MESS map from a precomputed raster ##
 
-render_messMap <- function(mess.rast, taxon.name, timeperiod, ssp, limits = NULL) {
+plot_messMap <- function(mess.rast, taxon.name, timeperiod, ssp, limits = NULL) {
 
   # Builds and saves the ggplot for one precomputed MESS raster. limits
   # optionally fixes the viridis colour scale (e.g. to a taxon's own min/max
@@ -124,7 +124,7 @@ render_messMap <- function(mess.rast, taxon.name, timeperiod, ssp, limits = NULL
 
 ## Function: single MESS map for one taxon x timeperiod x ssp ##
 
-plot_messMap <- function(taxon.name, timeperiod, ssp, agg.fact = NULL, mask.poly = NULL, limits = NULL) {
+batch_messMap <- function(taxon.name, timeperiod, ssp, agg.fact = NULL, mask.poly = NULL, limits = NULL) {
 
   # Calculates and plots a MESS surface for one taxon under one future
   # timeperiod x ssp combination, saving to
@@ -149,7 +149,7 @@ plot_messMap <- function(taxon.name, timeperiod, ssp, agg.fact = NULL, mask.poly
     # Coerce sf/sfc input to SpatVector for terra::mask()
 
     if (!terra::same.crs(future.rast, mask.poly)) {
-      cli::cli_abort("mask.poly CRS does not match future.rast CRS. Reproject mask.poly before calling {.fn plot_messMap}.")
+      cli::cli_abort("mask.poly CRS does not match future.rast CRS. Reproject mask.poly before calling {.fn batch_messMap}.")
     }
     # Flag CRS mismatch rather than silently reprojecting, since reprojecting
     # a vector mask on the fly can mask misaligned inputs upstream
@@ -169,7 +169,7 @@ plot_messMap <- function(taxon.name, timeperiod, ssp, agg.fact = NULL, mask.poly
     agg.fact = agg.fact
   )
 
-  gg.plot <- render_messMap(mess.rast, taxon.name, timeperiod, ssp, limits = limits)
+  gg.plot <- plot_messMap(mess.rast, taxon.name, timeperiod, ssp, limits = limits)
 
   return(gg.plot)
 
@@ -180,12 +180,18 @@ plot_messMap <- function(taxon.name, timeperiod, ssp, agg.fact = NULL, mask.poly
 generate_messMaps <- function(taxon.list = names(sdm.results),
                               timeperiods = names(future.env),
                               ssps = names(future.env[[1]]),
-                              agg.fact = 10,
+                              agg.fact = NULL,
                               mask.poly = NULL) {
 
   # Generates MESS maps for every combination of taxon.list x timeperiods x
   # ssps, allowing a subset of taxa/time periods/ssps to be requested rather
   # than always plotting the full taxon x 3 x 3 combination set.
+  # masking and aggregation of future.rast depend only on timeperiod x ssp,
+  # not on taxon.name, so they are done once per timeperiod x ssp combination
+  # up front and cached in env.cache, rather than being redone inside
+  # calc_mess() for every taxon that shares that timeperiod x ssp. calc_mess()
+  # is then called with agg.fact = NULL, since the cached raster is already
+  # aggregated.
   # For each taxon, MESS is calculated for every timeperiod x ssp combination
   # first and cached in mess.rast.list, so that a single shared colour scale
   # (taxon.limits) can be derived across that taxon's own combinations before
@@ -198,6 +204,51 @@ generate_messMaps <- function(taxon.list = names(sdm.results),
   }
   # Coerce once up front, outside the loops below
 
+  env.cache <- list()
+
+  cli::cli_progress_bar("Preparing future environment rasters",
+                        total = length(timeperiods) * length(ssps))
+
+  for (timeperiod in timeperiods) {
+    for (ssp in ssps) {
+
+      future.rast <- future.env[[timeperiod]][[ssp]]
+
+      if (!is.null(mask.poly)) {
+
+        if (!terra::same.crs(future.rast, mask.poly)) {
+          cli::cli_abort("mask.poly CRS does not match future.rast CRS. Reproject mask.poly before calling {.fn generate_messMaps}.")
+        }
+        # Flag CRS mismatch rather than silently reprojecting, since reprojecting
+        # a vector mask on the fly can mask misaligned inputs upstream
+
+        future.rast <- future.rast |>
+          terra::crop(mask.poly) |>
+          terra::mask(mask.poly)
+        # Crop first to reduce the extent before masking
+
+      }
+
+      cat.vars <- names(future.rast)[terra::is.factor(future.rast)]
+      if (length(cat.vars) > 0) {
+        future.rast <- future.rast[[base::setdiff(names(future.rast), cat.vars)]]
+      }
+      # Drop categorical layers here too, matching calc_mess()'s own exclusion,
+      # so the cached raster can be aggregated once below and reused across taxa
+
+      if (!is.null(agg.fact)) {
+        future.rast <- terra::aggregate(future.rast, fact = agg.fact, fun = "mean", na.rm = TRUE)
+      }
+
+      env.cache[[timeperiod]][[ssp]] <- future.rast
+
+      cli::cli_progress_update()
+
+    }
+  }
+
+  cli::cli_progress_done()
+
   cli::cli_progress_bar("Generating MESS maps",
                         total = length(taxon.list) * length(timeperiods) * length(ssps))
 
@@ -208,30 +259,15 @@ generate_messMaps <- function(taxon.list = names(sdm.results),
     for (timeperiod in timeperiods) {
       for (ssp in ssps) {
 
-        future.rast <- future.env[[timeperiod]][[ssp]]
-
-        if (!is.null(mask.poly)) {
-
-          if (!terra::same.crs(future.rast, mask.poly)) {
-            cli::cli_abort("mask.poly CRS does not match future.rast CRS. Reproject mask.poly before calling {.fn generate_messMaps}.")
-          }
-          # Flag CRS mismatch rather than silently reprojecting, since reprojecting
-          # a vector mask on the fly can mask misaligned inputs upstream
-
-          future.rast <- future.rast |>
-            terra::crop(mask.poly) |>
-            terra::mask(mask.poly)
-          # Crop first to reduce the extent before masking
-
-        }
-
         mess.rast.list[[timeperiod]][[ssp]] <- calc_mess(
           SDM.obj = sdm.results[[taxon.name]],
-          future.rast = future.rast,
+          future.rast = env.cache[[timeperiod]][[ssp]],
           taxon.name = taxon.name,
           full = FALSE,
-          agg.fact = agg.fact
+          agg.fact = NULL
         )
+        # future.rast is already masked, cropped, and aggregated once above;
+        # calc_mess() only needs to subset to this taxon's train.vars and run mess()
 
         cli::cli_progress_update()
 
@@ -248,8 +284,8 @@ generate_messMaps <- function(taxon.list = names(sdm.results),
     for (timeperiod in timeperiods) {
       for (ssp in ssps) {
 
-        render_messMap(mess.rast.list[[timeperiod]][[ssp]], taxon.name, timeperiod, ssp,
-                       limits = taxon.limits)
+        plot_messMap(mess.rast.list[[timeperiod]][[ssp]], taxon.name, timeperiod, ssp,
+                     limits = taxon.limits)
 
       }
     }
