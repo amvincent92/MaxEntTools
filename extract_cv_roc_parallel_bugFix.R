@@ -16,11 +16,11 @@
 #' @examples
 #' model.selection <- readRDS("data/maxent/modelSelection.RDS")
 #' cv.roc <- extract_cv_roc_parallel(sdm.results, model.selection)
-#' 
+#'
 
-## AI Generated Function, use with care ## 
+## AI Generated Function, use with care ##
 
-# TODO This fixes computation bug that 
+# TODO This fixes computation bug that
 
 extract_cv_roc_parallel <- function(sdm.results,
                                      model.selection,
@@ -303,6 +303,11 @@ extract_cv_roc_parallel <- function(sdm.results,
   plot.list <- purrr::map(results.ok, "plot")
 
   cli::cli_inform("Computed cross-validated ROC curves for {.val {nrow(auc.table)}} species")
+
+  saveRDS(auc.table, file = file.path(output.dir, "auc_table.RDS"))
+  saveRDS(roc.table, file = file.path(output.dir, "roc_table.RDS"))
+  # Saved alongside the per-species plots so roc/auc tables can be reloaded
+  # without re-running the cross-validation
 
   return(list(roc = roc.table, auc = auc.table, plots = plot.list))
 }

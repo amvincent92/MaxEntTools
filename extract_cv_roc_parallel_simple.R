@@ -219,5 +219,10 @@ extract_cv_roc_parallel_simple <- function(sdm.results,
 
   cli::cli_inform("Computed cross-validated ROC curves for {.val {nrow(auc.table)}} species")
 
+  saveRDS(auc.table, file = file.path(output.dir, "auc_table.RDS"))
+  saveRDS(roc.table, file = file.path(output.dir, "roc_table.RDS"))
+  # Saved alongside the per-species plots so roc/auc tables can be reloaded
+  # without re-running the cross-validation
+
   return(list(roc = roc.table, auc = auc.table, plots = plot.list))
 }

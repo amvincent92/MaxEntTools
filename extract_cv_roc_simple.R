@@ -161,6 +161,8 @@ extract_cv_roc <- function(sdm.results,
     cli::cli_alert_success("{.val {y}} done")
   }
 
+  ## TODO Could put in save output tables
+
   return(list(
     roc = dplyr::bind_rows(roc.list),
     auc = dplyr::bind_rows(auc.list),
